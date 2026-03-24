@@ -65,7 +65,7 @@ def find_image_files(directory):
 def main():
     # Set up argument parser
     parser = argparse.ArgumentParser(description="Check for valid JPG images in a directory")
-    parser.add_argument("--dir", type=str, default='/home/dtsai/Data/cgras_datasets/cgras_amag_2024_highdensityexperiment', help="Target directory to search (default: current working directory)")
+    parser.add_argument("--dir", type=str, default='/home/dtsai/Data/cgras_datasets/cgras_2024_high_density_experiment_aant', help="Target directory to search (default: current working directory)")
     parser.add_argument("--valid-output", type=str, default="valid_images.txt",
                         help="Output file for valid images (default: valid_images.txt)")
     parser.add_argument("--invalid-output", type=str, default="invalid_images.txt",
