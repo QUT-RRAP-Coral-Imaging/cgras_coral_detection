@@ -41,7 +41,7 @@ ccvs_sheet_name = 'CM-POLYP_MULTI-2024-11-26'
 manual_counts_sheet_name = 'T05_CG1-202412112300'
 
 # file with CCVS counts from export (corresponding tile number)
-ccvs_counts_file = 'T05_data.xlsx'
+ccvs_counts_file = 'T05_data_v2.xlsx'
 # ccvs_sheet_name = 'CM-POLYP_MULTI-2024-11-12'
 # ccvs_sheet_name = 'CM-POLYP_MULTI-2024-11-26'
 ccvs_sheet_name = 'CM-POLYP_MULTI-2024-12-11'
