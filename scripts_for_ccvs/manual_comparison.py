@@ -27,14 +27,14 @@ import seaborn as sns
 # file with manual counts from Mikaela
 manual_counts_whole_tiles_file = '202505_CGRAS_ManualValidationCounts_tile-layout-data_wholetiles.xlsx'
 # manual_counts_sheet_name = 'T05_CG1-202411122300'
-# manual_counts_sheet_name = 'T05_CG1-202411262300'
-manual_counts_sheet_name = 'T05_CG1-202412112300'
+manual_counts_sheet_name = 'T05_CG1-202411262300'
+# manual_counts_sheet_name = 'T05_CG1-202412112300'
 
 # file with CCVS counts from export (corresponding tile number)
-ccvs_counts_file = 'T05_data.xlsx'
+ccvs_counts_file = 'T05_data_v2.xlsx'
 # ccvs_sheet_name = 'CM-POLYP_MULTI-2024-11-12'
-# ccvs_sheet_name = 'CM-POLYP_MULTI-2024-11-26'
-ccvs_sheet_name = 'CM-POLYP_MULTI-2024-12-11'
+ccvs_sheet_name = 'CM-POLYP_MULTI-2024-11-26'
+# ccvs_sheet_name = 'CM-POLYP_MULTI-2024-12-11'
 
 def compare_counts(manual_file, manual_sheet, ccvs_file, ccvs_sheet):
     """
@@ -68,7 +68,7 @@ def compare_counts(manual_file, manual_sheet, ccvs_file, ccvs_sheet):
     
     
     # Compare differences
-    difference_matrix = ccvs_matrix - manual_matrix
+    difference_matrix = manual_matrix - ccvs_matrix
     absolute_difference = np.abs(difference_matrix)
     
     # import code
@@ -80,7 +80,7 @@ def compare_counts(manual_file, manual_sheet, ccvs_file, ccvs_sheet):
     max_difference = np.max(absolute_difference)
     total_manual_count = np.sum(manual_matrix)
     total_ccvs_count = np.sum(ccvs_matrix)
-    percentage_difference = 100 * (total_ccvs_count - total_manual_count) / total_manual_count
+    percentage_difference = 100 * (total_manual_count - total_ccvs_count) / total_manual_count
     
     # Create visualization of the difference
     plt.figure(figsize=(12, 10))
@@ -92,13 +92,51 @@ def compare_counts(manual_file, manual_sheet, ccvs_file, ccvs_sheet):
     
     # Create a heatmap of the difference matrix
     sns.heatmap(difference_matrix, cmap='coolwarm', center=0, annot=annot_matrix, fmt="",
-                cbar_kws={'label': 'Difference (CCVS - Manual)'})
+                cbar_kws={'label': 'Difference (Manual - CCVS)'})
     plt.title(f'Difference Matrix: {os.path.basename(ccvs_file)}, sheet: {ccvs_sheet_name} vs \n {os.path.basename(manual_file)}, sheet: {manual_counts_sheet_name}')
     plt.tight_layout()
     
-    # Save figure
+    # Save heatmap figure
     output_file = f"comparison_{os.path.splitext(os.path.basename(ccvs_file))[0]}_{manual_counts_sheet_name}.png"
     plt.savefig(output_file)
+    
+    # Create histogram of differences
+    plt.figure(figsize=(10, 6))
+    
+    # Flatten the difference matrix to get all difference values
+    differences_flat = difference_matrix.flatten()
+    
+    # Create bins based on the actual range of differences with bin size of 1
+    min_diff = int(np.min(differences_flat))
+    max_diff = int(np.max(differences_flat))
+    
+    # Ensure we have at least 10 bins, but use actual data range
+    bin_range = max(10, max_diff - min_diff + 1)
+    bins = np.arange(min_diff, max_diff + 2, 1)  # +2 to include the max value
+    
+    # Create histogram
+    plt.hist(differences_flat, bins=bins, edgecolor='black', alpha=0.7, color='steelblue')
+    plt.title(f'Histogram of Differences (Manual - CCVS)\n{os.path.basename(manual_file)}: {manual_sheet}')
+    plt.xlabel('Difference (Manual - CCVS)')
+    plt.ylabel('Frequency')
+    plt.grid(True, alpha=0.3)
+    
+    # Set x-axis ticks to show all integer values in the range
+    plt.xticks(range(min_diff, max_diff + 1))
+    
+    # Add statistics text to the plot
+    stats_text = f'Mean: {mean_difference:.2f}\nStd: {np.std(differences_flat):.2f}\nTotal pairs: {len(differences_flat)}\nRange: [{min_diff}, {max_diff}]'
+    plt.text(0.7, 0.95, stats_text, transform=plt.gca().transAxes, 
+             verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
+    
+    plt.tight_layout()
+    
+    # Save histogram figure
+    histogram_output_file = f"histogram_{os.path.splitext(os.path.basename(ccvs_file))[0]}_{manual_counts_sheet_name}.png"
+    plt.savefig(histogram_output_file)
+    
+    print(f"Heatmap saved to: {output_file}")
+    print(f"Histogram saved to: {histogram_output_file}")
     
     results = {
         "manual_counts": manual_matrix,
