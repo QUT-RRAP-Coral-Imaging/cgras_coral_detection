@@ -212,8 +212,8 @@ class CCVSTileConfigGenerator:
             yaml_data = {
                 "tile_id": f"{tank_id}_{tile_id}",
                 "species": "amag", # "acro",
-                "settle_time": "2024-11-03",
-                "spawning_time": "2024-10-25",
+                "settle_time": "2024-11-30",
+                "spawning_time": "2024-11-15",
                 "season": "2024Nov",
                 "num_tabs": [20, 20],
                 "tile_size": [280, 280],
@@ -309,28 +309,26 @@ def main():
     # Configuration parameters
     # target_dir = '/home/dtsai/Data/cgras_datasets/cgras_2024_aims_camera_trolley_fixed_filenames/cgras_2024_aims_camera_trolley/corals_spawned_2024_oct'
     # target_dir = '/home/dtsai/Data/cgras_datasets/cgras_amag_2024_highdensityexperiment/transfer_3385482_files_7ec9d82a/Aken_20241202'
-    # target_dir = '/home/dtsai/Data/cgras_datasets/cgras_amag_2024_highdensityexperiment'
-    target_dir = '/home/dtsai/Data/cgras_datasets/cgras_2025_growout_data/2025Dec'
+    target_dir = '/home/dtsai/Data/cgras_datasets/cgras_amag_2024_highdensityexperiment/Aken_20250128_c'
 
     species = 'amag'
-    week  = '1' # 3 months vs 1 month
+    week  = '12' # 3 months vs 1 month
     match_week = False
-    start_date = '241103'
-    end_date = '241109'
+    start_date = '250128'
+    end_date = '250129'
     tile_ids = ['T01', 'T02', 'T03', 'T4', 'T04', 'T05', 'T06','T7','T07', 'T08', 'T09', 'T10']
-    # output_dir = "/home/dtsai/Code/cgras/cgras_settler_counter/scripts_for_ccvs/highdensityexperiment_ccvs_config_files/Aken_202411_time0"
-    output_dir = '/home/dtsai/Data/cgras_datasets/cgras_2025_growout_data/2025Dec_config_files'
+    output_dir = "/home/dtsai/Code/cgras/cgras_settler_counter/scripts_for_ccvs/highdensityexperiment_ccvs_config_files/Aken_20250128_c"
     
     # Create and run the generator
     generator = CCVSTileConfigGenerator(
         target_dir=target_dir,
-        # species=species,
-        # match_species=False,
-        # week=week,
-        # match_week=match_week,
-        # start_date=start_date,
-        # end_date=end_date,
-        # tile_ids=tile_ids,
+        species=species,
+        match_species=False,
+        week=week,
+        match_week=match_week,
+        start_date=start_date,
+        end_date=end_date,
+        tile_ids=tile_ids,
         output_dir=output_dir
     )
     

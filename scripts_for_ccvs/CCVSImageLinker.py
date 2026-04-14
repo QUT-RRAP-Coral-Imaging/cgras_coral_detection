@@ -207,9 +207,9 @@ class CCVSImageLinker:
 
 
 def main():
-    yaml_dir = '/home/dtsai/Code/cgras/cgras_settler_counter/scripts_for_ccvs/highdensityexperiment_ccvs_config_files/Aken_202411_time0'
+    yaml_dir = '/home/dtsai/Code/cgras/cgras_settler_counter/scripts_for_ccvs/highdensityexperiment_ccvs_config_files/Aken_20250128_c'
     # target_dir = '/home/dtsai/Data/cgras_datasets/cgras_2024_aims_camera_trolley_fixed_filenames/cgras_2024_aims_camera_trolley/corals_spawned_2024_oct/*/*'
-    target_dir = '/home/dtsai/Data/cgras_datasets/cgras_amag_2024_highdensityexperiment/*'
+    target_dir = '/home/dtsai/Data/cgras_datasets/cgras_amag_2024_highdensityexperiment/Aken_20250128_c'
     
     # Create and run the image linker
     linker = CCVSImageLinker(yaml_dir, target_dir)

@@ -27,6 +27,7 @@ import seaborn as sns
 # file with manual counts from Mikaela
 manual_counts_whole_tiles_file = '202505_CGRAS_ManualValidationCounts_tile-layout-data_wholetiles.xlsx'
 # manual_counts_sheet_name = 'T05_CG1-202411122300'
+<<<<<<< HEAD
 manual_counts_sheet_name = 'T05_CG1-202411262300'
 # manual_counts_sheet_name = 'T05_CG1-202412112300'
 
@@ -35,6 +36,16 @@ ccvs_counts_file = 'T05_data_v2.xlsx'
 # ccvs_sheet_name = 'CM-POLYP_MULTI-2024-11-12'
 ccvs_sheet_name = 'CM-POLYP_MULTI-2024-11-26'
 # ccvs_sheet_name = 'CM-POLYP_MULTI-2024-12-11'
+=======
+# manual_counts_sheet_name = 'T05_CG1-202411262300'
+manual_counts_sheet_name = 'T05_CG1-202412112300'
+
+# file with CCVS counts from export (corresponding tile number)
+ccvs_counts_file = 'T05_data.xlsx'
+# ccvs_sheet_name = 'CM-POLYP_MULTI-2024-11-12'
+# ccvs_sheet_name = 'CM-POLYP_MULTI-2024-11-26'
+ccvs_sheet_name = 'CM-POLYP_MULTI-2024-12-11'
+>>>>>>> b6daa8c (manual comparison to generate whole-tile comparisons, updated image linker and tile config generator for CCVS 0_5_x, and script to check for valid input image files before CCVS)
 
 def compare_counts(manual_file, manual_sheet, ccvs_file, ccvs_sheet):
     """
