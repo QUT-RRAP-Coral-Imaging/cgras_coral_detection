@@ -20,10 +20,17 @@ from scipy import stats
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _save(fig: plt.Figure, path: Optional[Path], dpi: int = 150) -> None:
+def _save(
+    fig: plt.Figure,
+    path: Optional[Path],
+    dpi: int = 150,
+    formats: Optional[list[str]] = None,
+) -> None:
     if path:
         path.parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(path, dpi=dpi, bbox_inches="tight")
+        exts = formats or [path.suffix.lstrip(".")]
+        for ext in exts:
+            fig.savefig(path.with_suffix(f".{ext}"), dpi=dpi, bbox_inches="tight")
         plt.close(fig)
 
 
@@ -46,8 +53,7 @@ def plot_difference_heatmap(
     Zero-difference cells are left blank to reduce visual clutter.
     """
     diff = (manual - ai).astype(float)
-    annot = diff.copy().astype(object)
-    annot[diff == 0] = ""
+    annot = np.where(diff == 0, "", np.round(diff).astype(int).astype(str))
 
     fig, ax = plt.subplots(figsize=(10, 8))
     sns.heatmap(diff, cmap="coolwarm", center=0, annot=annot, fmt="", ax=ax,
@@ -186,6 +192,20 @@ def plot_histogram(
 # Aggregate figures
 # ---------------------------------------------------------------------------
 
+# Publication styling shared by the combined histogram figures: Times New
+# Roman (falling back to a metric-compatible serif if unavailable) and
+# PNG + PDF output at 300 dpi.
+_PUB_RC = {
+    "font.family": "serif",
+    "font.serif": ["Times New Roman", "Liberation Serif", "DejaVu Serif"],
+}
+
+
+def _add_light_grid(ax) -> None:
+    ax.set_axisbelow(True)
+    ax.grid(True, linestyle="-", linewidth=0.5, alpha=0.3, color="gray")
+
+
 def plot_combined_histogram(
     pairs,
     count_type: str = "alive",
@@ -197,6 +217,9 @@ def plot_combined_histogram(
 
     Display label is derived from the AI filename stem
     (e.g. "2025Dec-982091078941976"), giving one entry per tile.
+
+    Styled for publication: Times New Roman font, light gridlines, and saved
+    as both PNG and PDF at 300 dpi.
     """
     def _tile_label(p) -> str:
         return p.ai_file.stem.removesuffix("_data")
@@ -223,39 +246,81 @@ def plot_combined_histogram(
 
     colours = [f"C{i}" for i in range(len(tile_diffs))]
 
-    fig, ax = plt.subplots(figsize=(9, 5))
-    bottom = np.zeros(len(bins) - 1)
+    with plt.rc_context(_PUB_RC):
+        fig, ax = plt.subplots(figsize=(9, 5))
+        bottom = np.zeros(len(bins) - 1)
 
-    for (tile_label, dlist), colour in zip(tile_diffs.items(), colours):
+        for (tile_label, dlist), colour in zip(tile_diffs.items(), colours):
+            gd = np.concatenate(dlist)
+            counts, _ = np.histogram(gd, bins=bins)
+            n_timepoints = len(dlist)
+            ax.bar(bins[:-1] + 0.5, counts, width=1.0, bottom=bottom,
+                   color=colour, alpha=0.75, edgecolor="black", linewidth=0.5,
+                   label=f"{tile_label} ({n_timepoints} timepoint{'s' if n_timepoints != 1 else ''})")
+            bottom += counts
+
+        ax.axvline(mean_d, color="red", linewidth=1.6, linestyle="--",
+                   label=f"Mean = {mean_d:.2f}")
+        ax.axvline(0, color="black", linewidth=0.9, linestyle=":")
+        ax.set_xlabel("Difference (Manual − AI) per tab", fontsize=11)
+        ax.set_ylabel("Frequency", fontsize=11)
+        ax.set_title(
+            f"Pooled per-tab difference histogram — {count_type} counts\n"
+            f"all tile-timepoints (n = {len(all_diffs):,} tabs)",
+            fontsize=11,
+        )
+        ax.legend(fontsize=9)
+        _add_light_grid(ax)
+
+        stats_txt = (f"Mean = {mean_d:.2f}\n"
+                     f"SD = {sd_d:.2f}\n"
+                     f"n tabs = {len(all_diffs):,}\n"
+                     f"Range [{min_d}, {max_d}]")
+        ax.text(0.97, 0.95, stats_txt, transform=ax.transAxes, ha="right", va="top",
+                fontsize=9, bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.7))
+        plt.tight_layout()
+        _save(fig, output_path, dpi=300, formats=["png", "pdf"])
+    return fig
+
+
+def _draw_species_diff_panel(
+    ax,
+    sp: str,
+    tile_diffs: dict,
+    bins: np.ndarray,
+    tile_colours: dict,
+    title_fontsize: int = 10,
+) -> None:
+    """Draw one species' stacked difference histogram onto `ax`."""
+    sp_diffs = np.concatenate([d for dlist in tile_diffs.values() for d in dlist])
+    mean_d = float(np.mean(sp_diffs))
+    sd_d   = float(np.std(sp_diffs, ddof=1))
+
+    bottom = np.zeros(len(bins) - 1)
+    for tile_label, dlist in tile_diffs.items():
         gd = np.concatenate(dlist)
         counts, _ = np.histogram(gd, bins=bins)
-        n_timepoints = len(dlist)
+        n_tp = len(dlist)
         ax.bar(bins[:-1] + 0.5, counts, width=1.0, bottom=bottom,
-               color=colour, alpha=0.75, edgecolor="black", linewidth=0.5,
-               label=f"{tile_label} ({n_timepoints} timepoint{'s' if n_timepoints != 1 else ''})")
+               color=tile_colours[tile_label], alpha=0.75,
+               edgecolor="black", linewidth=0.5,
+               label=f"{tile_label} ({n_tp} tp{'s' if n_tp != 1 else ''})")
         bottom += counts
 
     ax.axvline(mean_d, color="red", linewidth=1.6, linestyle="--",
                label=f"Mean = {mean_d:.2f}")
     ax.axvline(0, color="black", linewidth=0.9, linestyle=":")
-    ax.set_xlabel("Difference (Manual − AI) per tab", fontsize=11)
-    ax.set_ylabel("Frequency", fontsize=11)
-    ax.set_title(
-        f"Pooled per-tab difference histogram — {count_type} counts\n"
-        f"all tile-timepoints (n = {len(all_diffs):,} tabs)",
-        fontsize=11,
-    )
-    ax.legend(fontsize=9)
+    ax.set_xlabel("Difference (Manual − AI) per tab", fontsize=10)
+    ax.set_ylabel("Frequency", fontsize=10)
+    ax.set_title(f"{sp}\n(n = {len(sp_diffs):,} tabs)", fontsize=title_fontsize)
+    ax.legend(fontsize=8)
+    _add_light_grid(ax)
 
     stats_txt = (f"Mean = {mean_d:.2f}\n"
                  f"SD = {sd_d:.2f}\n"
-                 f"n tabs = {len(all_diffs):,}\n"
-                 f"Range [{min_d}, {max_d}]")
+                 f"n tabs = {len(sp_diffs):,}")
     ax.text(0.97, 0.95, stats_txt, transform=ax.transAxes, ha="right", va="top",
-            fontsize=9, bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.7))
-    plt.tight_layout()
-    _save(fig, output_path)
-    return fig
+            fontsize=8, bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.7))
 
 
 def plot_combined_histogram_by_species(
@@ -270,6 +335,14 @@ def plot_combined_histogram_by_species(
     Tile display label is derived from the AI filename stem
     (e.g. "2025Dec-982091078941976"). A shared x-axis range is used across
     all panels so species can be compared directly.
+
+    In addition to the combined multi-panel figure, each species panel is
+    also saved as its own PNG (named
+    "combined_histogram_{count_type}_{species}.png") alongside output_path,
+    for use as standalone publication figures.
+
+    Styled for publication: Times New Roman font, light gridlines, and saved
+    as both PNG and PDF at 300 dpi.
     """
     def _tile_label(p) -> str:
         return p.ai_file.stem.removesuffix("_data")
@@ -307,48 +380,120 @@ def plot_combined_histogram_by_species(
     species_list = sorted(species_data.keys())
     n = len(species_list)
 
-    fig, axes = plt.subplots(1, n, figsize=(7 * n, 5), sharey=False)
-    if n == 1:
-        axes = [axes]
+    with plt.rc_context(_PUB_RC):
+        fig, axes = plt.subplots(1, n, figsize=(7 * n, 5), sharey=False)
+        if n == 1:
+            axes = [axes]
 
-    for ax, sp in zip(axes, species_list):
-        tile_diffs = species_data[sp]
-        sp_diffs = np.concatenate([d for dlist in tile_diffs.values() for d in dlist])
-        mean_d = float(np.mean(sp_diffs))
-        sd_d   = float(np.std(sp_diffs, ddof=1))
+        for ax, sp in zip(axes, species_list):
+            _draw_species_diff_panel(ax, sp, species_data[sp], bins, tile_colours)
 
-        bottom = np.zeros(len(bins) - 1)
-        for tile_label, dlist in tile_diffs.items():
-            gd = np.concatenate(dlist)
-            counts, _ = np.histogram(gd, bins=bins)
-            n_tp = len(dlist)
-            ax.bar(bins[:-1] + 0.5, counts, width=1.0, bottom=bottom,
-                   color=tile_colours[tile_label], alpha=0.75,
-                   edgecolor="black", linewidth=0.5,
-                   label=f"{tile_label} ({n_tp} tp{'s' if n_tp != 1 else ''})")
-            bottom += counts
+        fig.suptitle(
+            f"Per-tab difference histogram by species — {count_type} counts",
+            fontsize=12,
+        )
+        plt.tight_layout()
+        _save(fig, output_path, dpi=300, formats=["png", "pdf"])
 
-        ax.axvline(mean_d, color="red", linewidth=1.6, linestyle="--",
-                   label=f"Mean = {mean_d:.2f}")
-        ax.axvline(0, color="black", linewidth=0.9, linestyle=":")
-        ax.set_xlabel("Difference (Manual − AI) per tab", fontsize=10)
-        ax.set_ylabel("Frequency", fontsize=10)
-        ax.set_title(f"{sp}\n(n = {len(sp_diffs):,} tabs)", fontsize=10)
-        ax.legend(fontsize=8)
+        # Standalone per-species figures for publication
+        if output_path is not None:
+            for sp in species_list:
+                sp_fig, sp_ax = plt.subplots(figsize=(7, 5))
+                _draw_species_diff_panel(sp_ax, sp, species_data[sp], bins, tile_colours,
+                                          title_fontsize=11)
+                plt.tight_layout()
+                slug = sp.lower().replace(" ", "_")
+                sp_path = output_path.parent / f"combined_histogram_{count_type}_{slug}.png"
+                _save(sp_fig, sp_path, dpi=300, formats=["png", "pdf"])
 
-        stats_txt = (f"Mean = {mean_d:.2f}\n"
-                     f"SD = {sd_d:.2f}\n"
-                     f"n tabs = {len(sp_diffs):,}")
-        ax.text(0.97, 0.95, stats_txt, transform=ax.transAxes, ha="right", va="top",
-                fontsize=8, bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.7))
-
-    fig.suptitle(
-        f"Per-tab difference histogram by species — {count_type} counts",
-        fontsize=12,
-    )
-    plt.tight_layout()
-    _save(fig, output_path)
     return fig
+
+
+def plot_combined_histogram_by_tile(
+    pairs,
+    count_type: str = "alive",
+    output_dir: Optional[Path] = None,
+) -> dict[str, plt.Figure]:
+    """
+    One histogram per (species, tile ID), pooling per-cell (manual − AI)
+    differences across every timepoint available for that tile, with each
+    timepoint's contribution shown as a stacked colour segment.
+
+    Saved as "combined_histogram_{count_type}_{species}_{tile_id}.png" in
+    output_dir, one file per tile. Returns a dict of "{species}_{tile_id}"
+    -> Figure.
+
+    Styled for publication: Times New Roman font, light gridlines, and saved
+    as both PNG and PDF at 300 dpi.
+    """
+    # species → tile_id → date_label → [diff arrays]
+    data: dict[str, dict[str, dict[str, list]]] = {}
+    for p in pairs:
+        m_arr = p.manual_alive if count_type == "alive" else p.manual_dead
+        a_arr = p.ai_alive     if count_type == "alive" else p.ai_dead
+        if m_arr is None or a_arr is None:
+            continue
+        sp = (p.species or "unknown").title()
+        date_label = p.date.strftime("%Y-%m-%d")
+        d = (m_arr.astype(float) - a_arr.astype(float)).flatten()
+        (data.setdefault(sp, {})
+             .setdefault(p.tile_id, {})
+             .setdefault(date_label, [])
+             .append(d))
+
+    figures: dict[str, plt.Figure] = {}
+    with plt.rc_context(_PUB_RC):
+        for sp, tiles in data.items():
+            for tile_id, date_diffs in tiles.items():
+                all_diffs = np.concatenate([d for dlist in date_diffs.values() for d in dlist])
+                min_d = int(np.floor(all_diffs.min()))
+                max_d = int(np.ceil(all_diffs.max()))
+                bins = np.arange(min_d - 0.5, max_d + 1.5, 1)
+                mean_d = float(np.mean(all_diffs))
+                sd_d = float(np.std(all_diffs, ddof=1))
+
+                date_labels = sorted(date_diffs.keys())
+                colours = [f"C{i}" for i in range(len(date_labels))]
+
+                fig, ax = plt.subplots(figsize=(7, 5))
+                bottom = np.zeros(len(bins) - 1)
+                for date_label, colour in zip(date_labels, colours):
+                    gd = np.concatenate(date_diffs[date_label])
+                    counts, _ = np.histogram(gd, bins=bins)
+                    ax.bar(bins[:-1] + 0.5, counts, width=1.0, bottom=bottom,
+                           color=colour, alpha=0.75, edgecolor="black", linewidth=0.5,
+                           label=date_label)
+                    bottom += counts
+
+                ax.axvline(mean_d, color="red", linewidth=1.6, linestyle="--",
+                           label=f"Mean = {mean_d:.2f}")
+                ax.axvline(0, color="black", linewidth=0.9, linestyle=":")
+                ax.set_xlabel("Difference (Manual − AI) per tab", fontsize=10)
+                ax.set_ylabel("Frequency", fontsize=10)
+                ax.set_title(
+                    f"{sp} — tile {tile_id}\n"
+                    f"{count_type} counts (n = {len(all_diffs):,} tabs, "
+                    f"{len(date_labels)} timepoint{'s' if len(date_labels) != 1 else ''})",
+                    fontsize=11,
+                )
+                ax.legend(fontsize=8)
+                _add_light_grid(ax)
+
+                stats_txt = (f"Mean = {mean_d:.2f}\n"
+                             f"SD = {sd_d:.2f}\n"
+                             f"n tabs = {len(all_diffs):,}")
+                ax.text(0.97, 0.95, stats_txt, transform=ax.transAxes, ha="right", va="top",
+                        fontsize=8, bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.7))
+                plt.tight_layout()
+
+                if output_dir is not None:
+                    sp_slug = sp.lower().replace(" ", "_")
+                    tile_slug = str(tile_id).lower().replace(" ", "_")
+                    path = output_dir / f"combined_histogram_{count_type}_{sp_slug}_{tile_slug}.png"
+                    _save(fig, path, dpi=300, formats=["png", "pdf"])
+                figures[f"{sp}_{tile_id}"] = fig
+
+    return figures
 
 
 def plot_combined_scatter(
@@ -596,6 +741,9 @@ def plot_time_history_single(
 ) -> plt.Figure:
     """
     Time history figure for a single tile: total alive manual vs AI counts over time.
+
+    Styled for publication: Times New Roman font, light gridlines, and saved
+    as both PNG and PDF at 300 dpi.
     """
     tile_pairs = sorted(tile_pairs, key=lambda p: p.date)
     t0 = tile_pairs[0].date
@@ -616,25 +764,31 @@ def plot_time_history_single(
     season     = tile_pairs[0].season or ""
     meta_line  = "  ·  ".join(filter(None, [species, season]))
 
-    fig, ax = plt.subplots(figsize=(7, 5))
-    ax.plot(days, man_totals, "o-",  color="steelblue",
-            label="Manual", linewidth=1.8, markersize=7, zorder=3)
-    ax.plot(days, ai_totals,  "s--", color="darkorange",
-            label="AI",     linewidth=1.5, markersize=7, alpha=0.85, zorder=2)
+    with plt.rc_context({
+        "font.family": "serif",
+        "font.serif": ["Times New Roman", "Liberation Serif", "DejaVu Serif"],
+    }):
+        fig, ax = plt.subplots(figsize=(7, 5))
+        ax.plot(days, man_totals, "o-",  color="steelblue",
+                label="Manual", linewidth=1.8, markersize=7, zorder=3)
+        ax.plot(days, ai_totals,  "s--", color="darkorange",
+                label="AI",     linewidth=1.5, markersize=7, alpha=0.85, zorder=2)
 
-    ax.set_xlabel("Days since first count", fontsize=10)
-    ax.set_ylabel("Total alive coral count", fontsize=10)
-    title = f"Tile {tile_label}"
-    if meta_line:
-        title += f"\n{meta_line}"
-    ax.set_title(title, fontsize=11)
-    ax.legend(fontsize=9)
-    ax.set_xlim(left=-2)
-    ax.set_ylim(bottom=0)
-    ax.tick_params(labelsize=9)
+        ax.set_xlabel("Days since first count", fontsize=10)
+        ax.set_ylabel("Total alive coral count", fontsize=10)
+        title = f"Tile {tile_label}"
+        if meta_line:
+            title += f"\n{meta_line}"
+        ax.set_title(title, fontsize=11)
+        ax.legend(fontsize=9)
+        ax.set_xlim(left=-2)
+        ax.set_ylim(bottom=0)
+        ax.tick_params(labelsize=9)
+        ax.set_axisbelow(True)
+        ax.grid(True, linestyle="-", linewidth=0.5, alpha=0.3, color="gray")
 
-    plt.tight_layout()
-    _save(fig, output_path)
+        plt.tight_layout()
+        _save(fig, output_path, dpi=300, formats=["png", "pdf"])
     return fig
 
 

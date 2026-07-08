@@ -37,6 +37,7 @@ from .visualisation import (
     plot_histogram,
     plot_combined_histogram,
     plot_combined_histogram_by_species,
+    plot_combined_histogram_by_tile,
     plot_combined_scatter,
     plot_combined_bland_altman,
     plot_spatial_average_error,
@@ -159,6 +160,10 @@ def _aggregate_figures(pairs, output_dir: Path) -> None:
             plot_combined_histogram_by_species(
                 active, count_type=count_type,
                 output_path=agg_dir / f"combined_histogram_{count_type}_by_species.png",
+            )
+            plot_combined_histogram_by_tile(
+                active, count_type=count_type,
+                output_dir=agg_dir,
             )
         plot_combined_scatter(
             active, count_type=count_type,
