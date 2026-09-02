@@ -160,7 +160,8 @@ class FolderStructurer:
             tqdm.write(f"Error copying {src_path}: {str(e)}")
             return False
             
-    def _process_file_pair(self, source_dir, rel_img_path, output_images_dir, output_labels_dir, counters, counter_lock, pbar=None):
+    def _process_file_pair(self, source_dir, rel_img_path, output_images_dir, output_labels_dir,
+                           counters, counter_lock, dataset_name=None, pbar=None):
         """
         Process and copy an image-label file pair
         
@@ -171,6 +172,7 @@ class FolderStructurer:
             output_labels_dir: Target directory for labels
             counters: Dictionary for tracking counts
             counter_lock: Lock for thread-safe counter updates
+            dataset_name: Name of source dataset folder to preserve grouping
             pbar: Progress bar to update
             
         Returns:
@@ -194,13 +196,29 @@ class FolderStructurer:
                 pbar.update(2)  # Count both image and label as processed
             return
         
-        # Extract just the filename
-        img_filename = os.path.basename(rel_img_path)
-        label_filename = os.path.basename(rel_label_path)
-        
+        # Preserve discovered folder structure in the output so downstream split can group by source folder.
+        dataset_prefix = dataset_name if dataset_name else "unknown_dataset"
+
+        img_rel_parts = rel_img_path.split('/images/', 1)
+        if len(img_rel_parts) == 2:
+            rel_img_out_path = Path(dataset_prefix) / Path(img_rel_parts[1])
+        else:
+            rel_img_out_path = Path(dataset_prefix) / Path(os.path.basename(rel_img_path))
+
+        label_rel_parts = rel_label_path.split('/labels/', 1)
+        if len(label_rel_parts) == 2:
+            rel_label_out_path = Path(dataset_prefix) / Path(label_rel_parts[1])
+        else:
+            rel_label_out_path = Path(dataset_prefix) / Path(os.path.basename(rel_label_path))
+
+        dst_img_path = output_images_dir / rel_img_out_path
+        dst_label_path = output_labels_dir / rel_label_out_path
+        dst_img_path.parent.mkdir(parents=True, exist_ok=True)
+        dst_label_path.parent.mkdir(parents=True, exist_ok=True)
+
         # Copy files
-        self._copy_file_task(src_img_path, output_images_dir / img_filename, counters, "image", counter_lock)
-        self._copy_file_task(src_label_path, output_labels_dir / label_filename, counters, "label", counter_lock)
+        self._copy_file_task(src_img_path, dst_img_path, counters, "image", counter_lock)
+        self._copy_file_task(src_label_path, dst_label_path, counters, "label", counter_lock)
         
         if pbar:
             pbar.update(2)  # Update for both image and label
@@ -491,6 +509,7 @@ class FolderStructurer:
                         output_labels_dir,
                         counters,
                         counter_lock,
+                        dataset_name,
                         pbar
                     )
                     futures.append(future)

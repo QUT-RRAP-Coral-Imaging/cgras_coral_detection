@@ -1,9 +1,9 @@
 # CGRAS Data Processing Pipeline Configuration
 
 # Project details
-project_name: "Aken_2025_Nov_LAR13_LAR8"  # Name of the project
-input_path: "Data/cslics/2025_nov_spawn/Aken/cvat_exports"  # Absolute path to the input data from CVAT
-output_base_path: "Data/cslics/2025_nov_spawn/Aken/"  # Base output directory
+project_name: "Aken_2025_Nov_LAR_split"  # Name of the project
+input_path: "/home/java/reef_builders/Data/cslics/cvat_export/cslics_nov_2025/"  # Absolute path to the input data from CVAT
+output_base_path: "/home/java/reef_builders/Data/cslics/"  # Base output directory
 
 # Pipeline steps to run (in order)
 pipeline:
@@ -17,6 +17,7 @@ folder_structure:
 
 split:
   enabled: true
+  split_by_found_folder: true  # When true, each discovered source subfolder gets its own train/val/test split
   split_field: null  # Field to split by (e.g., tile, week). Null (None) for split randomly based on the ratio
   train_ratio: 0.7
   val_ratio: 0.15

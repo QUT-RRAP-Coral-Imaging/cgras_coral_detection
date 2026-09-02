@@ -1,9 +1,9 @@
 # Training configuration for image segmentation
 
 # Project settings
-project: "cgras_segmentation"
-name: "2025_genera_model"
-model_path: "cgras_segmentation/2025_genera_model14/weights/best.pt"
+project: "mnt/hpccs01/work/reef_builders/models/cgras_segmentation"
+name: "20260423_cgras_2025_Acro_640p_yolov8n"
+model_path: "yolov8n-seg.pt"
 yaml_path: "Data/2025_cgras/segmentation_outputs/2024_genera_model_filtered_split_tiled_balanced/cgras_data.yaml"
 task: "segment"  
 # Training parameters
@@ -16,7 +16,7 @@ save_period: 10
 patience: 25
 mask_overlap: false
 device: 0  # device = [0, 1, 2, 3]
-resume: true
+resume: false
 
 # Augmentation parameters
 image_size: 640

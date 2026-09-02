@@ -37,6 +37,10 @@ def train_model(config):
     # Initialize model
     model = YOLO(model_path)
     model.info()
+
+    seed = int(config.get('seed', 0))
+    deterministic = bool(config.get('deterministic', False))
+    print(f"Using seed={seed}, deterministic={deterministic}")
     
     # Train the model
     model.train(
@@ -52,7 +56,8 @@ def train_model(config):
         patience=config['patience'],
         pretrained=config['pretrained'],
         save_period=config['save_period'],
-        deterministic=False,
+        seed=seed,
+        deterministic=deterministic,
         overlap_mask=config['mask_overlap'],
         imgsz=config['image_size'],
         scale=config['scale'],

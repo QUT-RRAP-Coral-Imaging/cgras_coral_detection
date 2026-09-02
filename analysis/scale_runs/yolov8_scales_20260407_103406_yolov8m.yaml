@@ -1,0 +1,20 @@
+project: cslics_detection
+name: yolov8_scales_20260407_103406_yolov8m
+model_path: yolov8m.pt
+yaml_path: Data/cslics_subsurface_data/cslics_2023-2025_subsurface_M12.yaml
+task: detect
+classes:
+- 0
+pretrained: true
+epochs: 1000
+batch_size: 0.65
+workers: 4
+save_period: 10
+patience: 25
+mask_overlap: false
+device: 0
+image_size: 640
+flipud: 0.5
+fliplr: 0.5
+scale: 0.2
+deterministic: false

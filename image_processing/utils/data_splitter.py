@@ -36,6 +36,7 @@ class DatasetSplitter:
         self.file_info = []  # Stores parsed file information
         self.max_workers = min(32, os.cpu_count() + 4)
         self.new_yaml_path = None
+        self.data_paths = []
         
         # Regex pattern for CGRAS file naming convention
         # CGRAS_<Species>_<Room>_<date>_w<week_number>_T<tile_number>_<index_number>.jpg
@@ -49,6 +50,21 @@ class DatasetSplitter:
         
         # Load YAML data
         self._load_yaml()
+
+    def _get_data_paths(self):
+        """Extract all image data paths from the loaded YAML configuration."""
+        data_paths = []
+
+        if 'data' in self.yaml_data and isinstance(self.yaml_data['data'], list):
+            data_paths = self.yaml_data['data']
+        elif 'data' in self.yaml_data and isinstance(self.yaml_data['data'], dict):
+            for dataset_info in self.yaml_data['data'].values():
+                if isinstance(dataset_info, dict) and 'images' in dataset_info:
+                    data_paths.append(dataset_info['images'])
+        else:
+            raise ValueError("Unsupported YAML format: 'data' field not found or in unexpected format")
+
+        return data_paths
         
     def _load_yaml(self):
         """Load the YAML configuration file and find all image paths"""
@@ -63,15 +79,8 @@ class DatasetSplitter:
         self.label_paths = []
         
         # Extract data paths from YAML
-        data_paths = []
-        if 'data' in self.yaml_data and isinstance(self.yaml_data['data'], list):
-            data_paths = self.yaml_data['data']
-        elif 'data' in self.yaml_data and isinstance(self.yaml_data['data'], dict):
-            for dataset_name, dataset_info in self.yaml_data['data'].items():
-                if 'images' in dataset_info:
-                    data_paths.append(dataset_info['images'])
-        else:
-            raise ValueError("Unsupported YAML format: 'data' field not found or in unexpected format")
+        data_paths = self._get_data_paths()
+        self.data_paths = data_paths
         
         print(f"Found {len(data_paths)} dataset paths in the YAML file")
         
@@ -165,7 +174,8 @@ class DatasetSplitter:
                     'image_path': img_path,
                     'label_path': label_path if has_label else None,
                     'has_label': has_label,
-                    'original_dataset': self._get_dataset_name(img_path)
+                    'original_dataset': self._get_dataset_name(img_path),
+                    'source_subfolder': self._get_source_subfolder(img_path)
                 })
             elif aspa_match:
                 id_num, field1, field2, field3, field4, date, time, ext = aspa_match.groups()
@@ -199,7 +209,8 @@ class DatasetSplitter:
                     'image_path': img_path,
                     'label_path': label_path if has_label else None,
                     'has_label': has_label,
-                    'original_dataset': self._get_dataset_name(img_path)
+                    'original_dataset': self._get_dataset_name(img_path),
+                    'source_subfolder': self._get_source_subfolder(img_path)
                 })
             else:
                 # Handle files that don't match either pattern
@@ -219,7 +230,8 @@ class DatasetSplitter:
                     'image_path': img_path,
                     'label_path': label_path if has_label else None,
                     'has_label': has_label,
-                    'original_dataset': self._get_dataset_name(img_path)
+                    'original_dataset': self._get_dataset_name(img_path),
+                    'source_subfolder': self._get_source_subfolder(img_path)
                 })
                 malformed_files.append(filename)
         
@@ -241,15 +253,30 @@ class DatasetSplitter:
     
     def _get_dataset_name(self, file_path):
         """Extract the dataset name from a file path based on YAML paths"""
-        for data_path in self.yaml_data.get('data', []):
+        for data_path in self.data_paths:
             data_dir = self.base_dir / data_path
-            if data_dir in file_path.parents:
+            if data_dir == file_path.parent or data_dir in file_path.parents:
                 # Extract dataset name from data_path
-                if '/' in data_path:
-                    parts = data_path.split('/')
-                    return parts[1] if len(parts) > 1 else parts[0]  # datasets/dataset1/data/images -> dataset1
-                return data_path
+                path_parts = Path(data_path).parts
+                if len(path_parts) >= 2:
+                    return path_parts[-2]
+                return path_parts[0]
         return "unknown"
+
+    def _get_source_subfolder(self, file_path):
+        """Get the source subfolder relative to a configured images directory."""
+        for data_path in self.data_paths:
+            data_dir = self.base_dir / data_path
+            if data_dir == file_path.parent or data_dir in file_path.parents:
+                try:
+                    relative_parent = file_path.parent.relative_to(data_dir)
+                except ValueError:
+                    continue
+
+                if str(relative_parent) in ("", "."):
+                    return "root"
+                return str(relative_parent).replace("\\", "/")
+        return "root"
     
     def count_by_field(self, field):
         """
@@ -429,8 +456,8 @@ class DatasetSplitter:
 
         return assignments
 
-    def create_splits(self, split_field=None, train_ratio=0.7, val_ratio=0.15, test_ratio=0.15, 
-                        stratify_by=None, random_seed=42):
+    def create_splits(self, split_field=None, train_ratio=0.7, val_ratio=0.15, test_ratio=0.15,
+                        stratify_by=None, random_seed=42, split_by_found_folder=False):
         """
         Create train/validation/test splits based on a specific field.
         
@@ -441,6 +468,7 @@ class DatasetSplitter:
             test_ratio (float): Proportion for test set
             stratify_by (str, optional): Field to stratify by (e.g., 'species')
             random_seed (int): Random seed for reproducibility
+            split_by_found_folder (bool): If True, split each source subfolder independently
             
         Returns:
             dict: Split assignments for each unique value in split_field
@@ -452,6 +480,77 @@ class DatasetSplitter:
         # Check that ratios sum to 1.0
         if abs(train_ratio + val_ratio + test_ratio - 1.0) > 1e-6:
             raise ValueError(f"Split ratios must sum to 1.0: {train_ratio} + {val_ratio} + {test_ratio} = {train_ratio + val_ratio + test_ratio}")
+
+        if split_by_found_folder:
+            folder_col = 'source_subfolder'
+            if folder_col not in self.file_info.columns:
+                raise ValueError(
+                    f"'{folder_col}' not found in file info. Run parse_file_info() before splitting by folder."
+                )
+
+            print("Splitting each source subfolder independently...")
+            combined_file_info = self.file_info.copy()
+            combined_file_info['split'] = pd.Series(
+                [None] * len(combined_file_info), index=combined_file_info.index, dtype='object'
+            )
+            folder_summaries = {}
+
+            grouped_subfolders = combined_file_info.groupby(folder_col, dropna=False, sort=True)
+            for group_idx, (folder_name, group_df) in enumerate(grouped_subfolders):
+                folder_label = folder_name
+                if pd.isna(folder_label) or str(folder_label).strip() == "":
+                    folder_label = "root"
+
+                print(f"\nProcessing source subfolder '{folder_label}' with {len(group_df)} images")
+
+                working_group = group_df.copy()
+                working_group['__original_index'] = working_group.index
+
+                self.file_info = working_group.reset_index(drop=True)
+                self.create_splits(
+                    split_field=split_field,
+                    train_ratio=train_ratio,
+                    val_ratio=val_ratio,
+                    test_ratio=test_ratio,
+                    stratify_by=stratify_by,
+                    random_seed=random_seed + group_idx,
+                    split_by_found_folder=False,
+                )
+
+                for _, row in self.file_info.iterrows():
+                    combined_file_info.at[int(row['__original_index']), 'split'] = row['split']
+
+                group_train = (self.file_info['split'] == 'train').sum()
+                group_val = (self.file_info['split'] == 'val').sum()
+                group_test = (self.file_info['split'] == 'test').sum()
+                group_total = len(self.file_info)
+                folder_summaries[folder_label] = {
+                    'train': int(group_train),
+                    'val': int(group_val),
+                    'test': int(group_test),
+                    'total': int(group_total),
+                }
+
+                print(
+                    f"Source subfolder '{folder_label}' split: "
+                    f"train={group_train} ({group_train / max(group_total, 1):.1%}), "
+                    f"val={group_val} ({group_val / max(group_total, 1):.1%}), "
+                    f"test={group_test} ({group_test / max(group_total, 1):.1%})"
+                )
+
+            self.file_info = combined_file_info
+
+            train_count = (self.file_info['split'] == 'train').sum()
+            val_count = (self.file_info['split'] == 'val').sum()
+            test_count = (self.file_info['split'] == 'test').sum()
+            total = len(self.file_info)
+
+            print("\nFinal Split Counts (all subfolders combined):")
+            print(f"  - Train: {train_count} ({train_count/total:.1%})")
+            print(f"  - Validation: {val_count} ({val_count/total:.1%})")
+            print(f"  - Test: {test_count} ({test_count/total:.1%})")
+
+            return folder_summaries
             
         # Set random seed for reproducibility
         random.seed(random_seed)
@@ -460,7 +559,9 @@ class DatasetSplitter:
         total = len(self.file_info)
         
         # Initialize the split column with empty values
-        self.file_info['split'] = np.nan
+        self.file_info['split'] = pd.Series(
+            [None] * len(self.file_info), index=self.file_info.index, dtype='object'
+        )
         
         # Special handling for very small datasets (less than 3 images)
         if total < 3:
@@ -887,9 +988,12 @@ class DatasetSplitter:
         
         return allocation
     
-    def export_splits(self):
+    def export_splits(self, preserve_subfolders=False):
         """
         Export the dataset splits to the output directory with desired structure.
+
+        Args:
+            preserve_subfolders (bool): If True, export as <source_folder>/<split>/images.
         
         Returns:
             bool: True if successful
@@ -900,19 +1004,15 @@ class DatasetSplitter:
             
         # Create output directory
         os.makedirs(self.output_path, exist_ok=True)
-        
-        # Create split directories
-        split_dirs = {
-            'train': self.output_path / 'train',
-            'val': self.output_path / 'valid',
-            'test': self.output_path / 'test'
-        }
-        
-        for split_dir in split_dirs.values():
-            split_dir.mkdir(exist_ok=True)
-        
-        # Group files by original dataset
-        datasets = self.file_info['original_dataset'].unique()
+
+        if preserve_subfolders:
+            # Remove legacy split-first directories so reruns don't keep stale layout artifacts.
+            for legacy_dir_name in ('train', 'valid', 'test'):
+                legacy_dir = self.output_path / legacy_dir_name
+                if legacy_dir.exists() and legacy_dir.is_dir():
+                    shutil.rmtree(legacy_dir)
+
+        dataset_folders = set()
         
         # Copy files to their respective split directories
         with tqdm(total=len(self.file_info), desc="Copying files", unit="files") as pbar:
@@ -921,11 +1021,38 @@ class DatasetSplitter:
                 
                 for _, row in self.file_info.iterrows():
                     split = row['split']
-                    dataset_name = row['original_dataset']
-                    
-                    # Create dataset & images subdirectory in split
-                    (split_dirs[split] / 'images').mkdir(parents=True, exist_ok=True)
-                    (split_dirs[split] / 'labels').mkdir(parents=True, exist_ok=True)
+
+                    split_dir_name = 'valid' if split == 'val' else split
+
+                    # Default split-first layout
+                    image_split_dir = self.output_path / split_dir_name / 'images'
+                    label_split_dir = self.output_path / split_dir_name / 'labels'
+
+                    if preserve_subfolders:
+                        source_folder = 'root'
+                        relative_subfolder = Path()
+
+                        subfolder_value = row.get('source_subfolder', 'root')
+                        if pd.notna(subfolder_value):
+                            subfolder_str = str(subfolder_value).strip()
+                            if subfolder_str not in ('', '.', 'root'):
+                                candidate = Path(subfolder_str)
+                                if '..' not in candidate.parts:
+                                    normalized_parts = [p for p in candidate.parts if p not in ('', '.')]
+                                    if normalized_parts:
+                                        source_folder = normalized_parts[0]
+                                        remainder = normalized_parts[1:]
+                                        if remainder and remainder[0].lower() == 'train':
+                                            remainder = remainder[1:]
+                                        if remainder:
+                                            relative_subfolder = Path(*remainder)
+
+                        dataset_folders.add(source_folder)
+                        image_split_dir = self.output_path / source_folder / split_dir_name / 'images' / relative_subfolder
+                        label_split_dir = self.output_path / source_folder / split_dir_name / 'labels' / relative_subfolder
+
+                    image_split_dir.mkdir(parents=True, exist_ok=True)
+                    label_split_dir.mkdir(parents=True, exist_ok=True)
 
                     
                     # Source paths
@@ -933,8 +1060,8 @@ class DatasetSplitter:
                     src_label_path = row['label_path']
                     
                     # Destination paths - update these paths:
-                    dst_img_path = split_dirs[split] / 'images' / src_img_path.name
-                    dst_label_path = split_dirs[split] / 'labels' / (src_img_path.stem + '.txt')
+                    dst_img_path = image_split_dir / src_img_path.name
+                    dst_label_path = label_split_dir / (src_img_path.stem + '.txt')
 
                     
                     # Copy image
@@ -952,11 +1079,21 @@ class DatasetSplitter:
                 concurrent.futures.wait(futures)
         
         # Create YAML file with the new split structure
+        if preserve_subfolders and dataset_folders:
+            sorted_folders = sorted(dataset_folders)
+            train_paths = [f"{folder}/train/images" for folder in sorted_folders]
+            val_paths = [f"{folder}/valid/images" for folder in sorted_folders]
+            test_paths = [f"{folder}/test/images" for folder in sorted_folders]
+        else:
+            train_paths = ['train/images']
+            val_paths = ['valid/images']
+            test_paths = ['test/images']
+
         yaml_data = {
             'path': str(self.output_path.absolute()),
-            'train': ['train/images'],
-            'val': ['valid/images'],
-            'test': ['test/images'],
+            'train': train_paths,
+            'val': val_paths,
+            'test': test_paths,
             'names': self.yaml_data['names']
         }
         
@@ -1011,6 +1148,8 @@ if __name__ == "__main__":
     parser.add_argument("--val", type=float, default=0.15, help="Validation ratio (default: 0.15)")
     parser.add_argument("--test", type=float, default=0.15, help="Test ratio (default: 0.15)")
     parser.add_argument("--seed", type=int, default=42, help="Random seed (default: 42)")
+    parser.add_argument("--split-by-found-folder", action="store_true",
+                        help="Split each discovered source subfolder independently")
     parser.add_argument("--analyze", action="store_true", help="Only analyze distribution without splitting")
     parser.add_argument("--visualize-field", help="Field to visualize distribution (e.g., species, tile, week)")
     
@@ -1030,6 +1169,7 @@ if __name__ == "__main__":
             val_ratio=args.val,
             test_ratio=args.test,
             stratify_by=args.stratify_by,
-            random_seed=args.seed
+            random_seed=args.seed,
+            split_by_found_folder=args.split_by_found_folder,
         )
-        splitter.export_splits()
+        splitter.export_splits(preserve_subfolders=args.split_by_found_folder)

@@ -110,6 +110,10 @@ def run_split(config, input_yaml_path, output_path, logger=None):
     test_ratio = split_config.get('test_ratio', 0.15)
     stratify_by = split_config.get('stratify_by')
     random_seed = split_config.get('random_seed', 42)
+    split_by_found_folder = split_config.get('split_by_found_folder', False)
+
+    if split_by_found_folder:
+        logger.info("Split mode enabled: splitting each discovered source subfolder independently")
     
     # Initialize the splitter
     splitter = DatasetSplitter(input_yaml_path, output_path)
@@ -124,11 +128,12 @@ def run_split(config, input_yaml_path, output_path, logger=None):
         val_ratio=val_ratio,
         test_ratio=test_ratio,
         stratify_by=stratify_by,
-        random_seed=random_seed
+        random_seed=random_seed,
+        split_by_found_folder=split_by_found_folder,
     )
     
     # Export splits
-    success = splitter.export_splits()
+    success = splitter.export_splits(preserve_subfolders=split_by_found_folder)
     
     if success:
         logger.info(f"Split step completed. Output at: {output_path}")

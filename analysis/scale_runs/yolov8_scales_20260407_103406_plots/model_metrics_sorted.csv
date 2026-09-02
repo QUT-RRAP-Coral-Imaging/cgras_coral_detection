@@ -1,0 +1,6 @@
+model_size,run_name,model_path,best_weights,precision,recall,map50,map50_95
+yolov8n.pt,yolov8_scales_20260407_103406_yolov8n,yolov8n.pt,cslics_detection/yolov8_scales_20260407_103406_yolov8n/weights/best.pt,0.712582,0.777947,0.825153,0.564004
+yolov8s.pt,yolov8_scales_20260407_103406_yolov8s,yolov8s.pt,cslics_detection/yolov8_scales_20260407_103406_yolov8s/weights/best.pt,0.737290,0.816565,0.859261,0.594303
+yolov8m.pt,yolov8_scales_20260407_103406_yolov8m,yolov8m.pt,cslics_detection/yolov8_scales_20260407_103406_yolov8m/weights/best.pt,0.771943,0.797256,0.865371,0.646943
+yolov8l.pt,yolov8_scales_20260407_103406_yolov8l,yolov8l.pt,cslics_detection/yolov8_scales_20260407_103406_yolov8l/weights/best.pt,0.761924,0.804962,0.867675,0.617210
+yolov8x.pt,yolov8_scales_20260407_103406_yolov8x,yolov8x.pt,cslics_detection/yolov8_scales_20260407_103406_yolov8x/weights/best.pt,0.768161,0.834350,0.870248,0.655311

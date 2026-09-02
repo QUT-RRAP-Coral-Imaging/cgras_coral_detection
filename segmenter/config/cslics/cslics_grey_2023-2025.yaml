@@ -1,0 +1,24 @@
+# Training configuration for image segmentation
+
+# Project settings
+project: "mnt/hpccs01/work/reef_builders/models/cslics_detection"
+name: "20260421_cslics_subsurface_grey_640p_yolov8n"
+model_path: "yolov8n.pt"
+yaml_path: "mnt/hpccs01/work/reef_builders/Data/datasets/cslics_subsurface_data/cslics_grey_2023-2025_subsurface_M12.yaml"
+task: "detect"
+# Training parameters
+classes: [0]  # Coral: Alive and Dead
+pretrained: true
+epochs: 1000
+batch_size: 0.65
+workers: 4
+save_period: 10
+patience: 25
+mask_overlap: false
+device: 0 # device = [0, 1, 2, 3]
+
+# Augmentation parameters
+image_size: 640
+flipud: 0.5
+fliplr: 0.5
+scale: 0.2
